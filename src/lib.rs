@@ -1,22 +1,28 @@
 #![allow(dead_code)]
-use std::{alloc::Layout, alloc::alloc, ptr::NonNull};
+use std::{alloc::alloc, alloc::Layout, ptr::NonNull};
 
-pub struct BumpUp {
+pub struct BumpUp<const MIN_ALIGN: usize> {
     start: *mut u8,
     end: *mut u8,
     ptr: *mut u8,
 }
 
-const MIN_ALIGN: usize = 8;
+#[inline(never)]
+pub fn foo(x: &mut BumpUp<8>) {
+    let layout = Layout::new::<usize>();
+    for _ in 0..10000 {
+        let ptr = x.alloc(layout).unwrap();
+        unsafe { ptr.as_ptr().cast::<usize>().write(usize::default()) }
+    }
+}
 
-impl BumpUp {
-
+impl<const MIN_ALIGN: usize> BumpUp<MIN_ALIGN> {
     pub fn with_capacity(cap: usize) -> Self {
         let layout = Layout::from_size_align(cap, 8).unwrap();
         let ptr = unsafe { alloc(layout) };
         Self {
             start: ptr,
-            end: ptr.wrapping_add(cap) ,
+            end: ptr.wrapping_add(cap),
             ptr,
         }
     }
@@ -58,13 +64,13 @@ impl BumpUp {
     }
 }
 
-pub struct BumpDown {
+pub struct BumpDown<const MIN_ALIGN: usize> {
     start: *mut u8,
     ptr: *mut u8,
     end: *mut u8,
 }
 
-impl BumpDown {
+impl<const MIN_ALIGN: usize> BumpDown<MIN_ALIGN> {
     pub fn with_capacity(cap: usize) -> Self {
         let layout = Layout::from_size_align(cap, 8).unwrap();
         let ptr = unsafe { alloc(layout) };
@@ -104,7 +110,7 @@ impl BumpDown {
 
         if aligned_ptr >= start {
             self.ptr = aligned_ptr;
-            let aligned_ptr = unsafe {NonNull::new_unchecked(aligned_ptr)};
+            let aligned_ptr = unsafe { NonNull::new_unchecked(aligned_ptr) };
             Some(aligned_ptr)
         } else {
             None
@@ -123,7 +129,7 @@ impl BumpDown {
 
         if aligned_ptr >= start {
             self.ptr = aligned_ptr;
-            let aligned_ptr = unsafe {NonNull::new_unchecked(aligned_ptr)};
+            let aligned_ptr = unsafe { NonNull::new_unchecked(aligned_ptr) };
             Some(aligned_ptr)
         } else {
             None
@@ -148,14 +154,13 @@ fn align_manual(ptr: *mut u8) -> usize {
     8usize.wrapping_sub(ptr as usize) & (8 - 1)
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn bump_up() {
-        let mut bump = BumpUp::with_capacity(100);
+        let mut bump = BumpUp::<8>::with_capacity(100);
         let layout = Layout::new::<u8>();
         let ptr = bump.alloc(layout).unwrap();
         assert_eq!(ptr.as_ptr() as usize % 8, 0);
