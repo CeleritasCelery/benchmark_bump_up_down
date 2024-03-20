@@ -8,12 +8,8 @@ pub struct BumpUp<const MIN_ALIGN: usize> {
 }
 
 #[inline(never)]
-pub fn foo(x: &mut BumpUp<8>) {
-    let layout = Layout::new::<usize>();
-    for _ in 0..10000 {
-        let ptr = x.alloc(layout).unwrap();
-        unsafe { ptr.as_ptr().cast::<usize>().write(usize::default()) }
-    }
+pub fn foo(x: &[usize]) -> usize {
+    Layout::for_value(x).align()
 }
 
 impl<const MIN_ALIGN: usize> BumpUp<MIN_ALIGN> {
@@ -34,6 +30,52 @@ impl<const MIN_ALIGN: usize> BumpUp<MIN_ALIGN> {
     #[inline(always)]
     const fn align_offset(size: usize, align: usize) -> usize {
         align.wrapping_sub(size) & (align - 1)
+    }
+
+    #[inline]
+    pub fn alloc_orig(&mut self, layout: Layout) -> Option<NonNull<u8>> {
+        let align = layout.align();
+        let size = layout.size();
+        debug_assert!(align > 0);
+        debug_assert!(align.is_power_of_two());
+
+        let ptr = self.ptr as usize;
+
+        // Round the bump pointer up to the requested
+        // alignment.
+        let aligned = (ptr.checked_add(align - 1))? & !(align - 1);
+        let new_ptr = aligned.checked_add(size)?;
+
+        let end = self.end as usize;
+        if new_ptr > end {
+            // Didn't have enough capacity!
+            return None;
+        }
+
+        self.ptr = new_ptr as *mut u8;
+        unsafe { Some(NonNull::new_unchecked(aligned as *mut u8)) }
+    }
+
+    #[inline]
+    pub fn alloc_orig_v2(&mut self, layout: Layout) -> Option<NonNull<u8>> {
+        let ptr = self.ptr as usize;
+        let align = layout.align();
+        let size = layout.size();
+
+        let offset = Self::align_offset(ptr, align);
+        // can't overflow due to Layout constraints
+        let total_size = offset + size;
+        let end = self.end as usize;
+
+        if total_size > end - ptr {
+            return None;
+        }
+        // we know that total_size + ptr <= end, so we can't overflow
+        let new_ptr = ptr + total_size;
+        let aligned = ptr + offset;
+
+        self.ptr = new_ptr as *mut u8;
+        unsafe { Some(NonNull::new_unchecked(aligned as *mut u8)) }
     }
 
     #[inline]
@@ -98,7 +140,7 @@ impl<const MIN_ALIGN: usize> BumpDown<MIN_ALIGN> {
     }
 
     #[inline]
-    pub fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
+    pub fn alloc_orig(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         let ptr = self.ptr;
         let start = self.start;
         if (ptr as usize) < layout.size() {
@@ -118,7 +160,7 @@ impl<const MIN_ALIGN: usize> BumpDown<MIN_ALIGN> {
     }
 
     #[inline]
-    pub fn alloc_aligned(&mut self, layout: Layout) -> Option<NonNull<u8>> {
+    pub fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         let ptr = self.ptr;
         let start = self.start;
         if (ptr as usize) < layout.size() {
