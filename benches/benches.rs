@@ -60,8 +60,8 @@ impl Alloc for BumpDownOrig {
     }
 }
 
-struct BumpUpV2(BumpUp<1>);
-impl Alloc for BumpUpV2 {
+struct BumpUpByte(BumpUp<1>);
+impl Alloc for BumpUpByte {
     fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
         self.0.alloc(layout)
     }
@@ -71,25 +71,29 @@ impl Alloc for BumpUpV2 {
     }
 }
 
-impl<const M: usize> Alloc for BumpUp<M> {
+struct BumpUpWord(BumpUp<8>);
+impl Alloc for BumpUpWord {
     fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
-        self.alloc(layout)
+        self.0.alloc(layout)
     }
+
     fn clear(&mut self) {
-        self.clear();
+        self.0.clear()
     }
 }
 
-impl<const M: usize> Alloc for BumpDown<M> {
+struct BumpDownWord(BumpDown<8>);
+impl Alloc for BumpDownWord {
     fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
-        self.alloc(layout)
+        self.0.alloc(layout)
     }
+
     fn clear(&mut self) {
-        self.clear();
+        self.0.clear()
     }
 }
 
-pub fn alloc<T: Default + From<usize>, A: Alloc>(arena: &mut A, n: usize) {
+pub fn alloc<T: From<usize>, A: Alloc>(arena: &mut A, n: usize) {
     let layout = Layout::new::<T>();
     arena.clear();
     for _ in 0..n {
@@ -111,60 +115,59 @@ pub fn alloc_slice<T: Copy, A: Alloc>(val: &[T], arena: &mut A, n: usize) {
     }
 }
 
-const M: usize = std::mem::align_of::<usize>();
+const MIN_ALIGN: usize = std::mem::align_of::<usize>();
 const ALLOCATIONS: usize = 10000;
 const LEN: usize = 1;
 
 fn bench_alloc_generic<T: Default + From<usize>>(name: &str, c: &mut Criterion) {
     let mut group = c.benchmark_group(name);
-    let capacity = ALLOCATIONS * max(size_of::<T>(), M);
-    let mut arena = black_box(BumpUp::with_capacity(capacity));
-    group.bench_function("new/up", |b| {
-        b.iter(|| alloc::<T, BumpUp<M>>(&mut arena, ALLOCATIONS))
-    });
-    let mut arena = black_box(BumpDown::with_capacity(capacity));
-    group.bench_function("new/down", |b| {
-        b.iter(|| alloc::<T, BumpDown<M>>(&mut arena, ALLOCATIONS))
-    });
+    let capacity = ALLOCATIONS * max(size_of::<T>(), MIN_ALIGN);
     let mut arena = black_box(BumpUpOrig(BumpUp::with_capacity(capacity)));
     group.bench_function("orig/up", |b| {
         b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
     });
-    let mut arena = black_box(BumpUpV2(BumpUp::with_capacity(capacity)));
-    group.bench_function("v2/up", |b| {
-        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
-    });
-
     let mut arena = black_box(BumpDownOrig(BumpDown::with_capacity(capacity)));
     group.bench_function("orig/down", |b| {
         b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
     });
+    let mut arena = black_box(BumpUpByte(BumpUp::with_capacity(capacity)));
+    group.bench_function("byte/up", |b| {
+        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpUpWord(BumpUp::with_capacity(capacity)));
+    group.bench_function("word/up", |b| {
+        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpDownWord(BumpDown::with_capacity(capacity)));
+    group.bench_function("word/down", |b| {
+        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
+    });
+
 }
 
 fn bench_alloc_slice_generic<T: Default + Copy>(name: &str, c: &mut Criterion) {
     let mut group = c.benchmark_group(name);
-    let capacity = ALLOCATIONS * LEN * max(size_of::<T>(), M);
+    let capacity = ALLOCATIONS * LEN * max(size_of::<T>(), MIN_ALIGN);
     let val: Box<[T]> = black_box(Box::new([T::default(); LEN]));
-
-    let mut arena = black_box(BumpUp::with_capacity(capacity));
-    group.bench_function("new/up", |b| {
-        b.iter(|| alloc_slice::<T, BumpUp<M>>(&val, &mut arena, ALLOCATIONS))
-    });
-    let mut arena = black_box(BumpDown::with_capacity(capacity));
-    group.bench_function("new/down", |b| {
-        b.iter(|| alloc_slice::<T, BumpDown<M>>(&val, &mut arena, ALLOCATIONS))
-    });
 
     let mut arena = black_box(BumpUpOrig(BumpUp::with_capacity(capacity)));
     group.bench_function("orig/up", |b| {
         b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
     });
-    let mut arena = black_box(BumpUpV2(BumpUp::with_capacity(capacity)));
-    group.bench_function("v2/up", |b| {
-        b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
-    });
     let mut arena = black_box(BumpDownOrig(BumpDown::with_capacity(capacity)));
     group.bench_function("orig/down", |b| {
+        b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpUpByte(BumpUp::with_capacity(capacity)));
+    group.bench_function("byte/up", |b| {
+        b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpUpWord(BumpUp::with_capacity(capacity)));
+    group.bench_function("word/up", |b| {
+        b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpDownWord(BumpDown::with_capacity(capacity)));
+    group.bench_function("word/down", |b| {
         b.iter(|| alloc_slice::<T, _>(&val, &mut arena, ALLOCATIONS))
     });
 }
