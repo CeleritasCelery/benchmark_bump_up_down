@@ -57,28 +57,6 @@ impl<const MIN_ALIGN: usize> BumpUp<MIN_ALIGN> {
     }
 
     #[inline]
-    pub fn alloc_orig_v2(&mut self, layout: Layout) -> Option<NonNull<u8>> {
-        let ptr = self.ptr as usize;
-        let align = layout.align();
-        let size = layout.size();
-
-        let offset = Self::align_offset(ptr, align);
-        // can't overflow due to Layout constraints
-        let total_size = offset + size;
-        let end = self.end as usize;
-
-        if total_size > end - ptr {
-            return None;
-        }
-        // we know that total_size + ptr <= end, so we can't overflow
-        let new_ptr = ptr + total_size;
-        let aligned = ptr + offset;
-
-        self.ptr = new_ptr as *mut u8;
-        unsafe { Some(NonNull::new_unchecked(aligned as *mut u8)) }
-    }
-
-    #[inline]
     pub fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         let ptr = self.ptr;
         let align = layout.align();
