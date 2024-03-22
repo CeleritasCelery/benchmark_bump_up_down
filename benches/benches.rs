@@ -9,21 +9,20 @@ use std::mem::size_of;
 pub struct Small(u8);
 
 #[derive(Default, Copy, Clone)]
-pub struct Medium(usize);
+pub struct Medium(u64);
 
 #[derive(Default, Copy, Clone)]
-#[repr(align(16))]
-pub struct Big(usize, usize);
+pub struct Big(u128);
 
 impl From<usize> for Big {
     fn from(val: usize) -> Self {
-        Self(val, val)
+        Self(val as u128)
     }
 }
 
 impl From<usize> for Medium {
     fn from(val: usize) -> Self {
-        Self(val)
+        Self(val as u64)
     }
 }
 
@@ -82,8 +81,30 @@ impl Alloc for BumpUpWord {
     }
 }
 
+struct BumpUp2Word(BumpUp<16>);
+impl Alloc for BumpUp2Word {
+    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+        self.0.alloc(layout)
+    }
+
+    fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
 struct BumpDownWord(BumpDown<8>);
 impl Alloc for BumpDownWord {
+    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+        self.0.alloc(layout)
+    }
+
+    fn clear(&mut self) {
+        self.0.clear()
+    }
+}
+
+struct BumpDown2Word(BumpDown<16>);
+impl Alloc for BumpDown2Word {
     fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
         self.0.alloc(layout)
     }
@@ -98,11 +119,7 @@ pub fn alloc<T: From<usize>, A: Alloc>(arena: &mut A, n: usize) {
     arena.clear();
     for _ in 0..n {
         let ptr = arena.alloc(layout).unwrap();
-        unsafe {
-            ptr.as_ptr()
-                .cast::<T>()
-                .write(T::from(ptr.as_ptr() as usize))
-        }
+        black_box(ptr);
     }
 }
 
@@ -115,7 +132,7 @@ pub fn alloc_slice<T: Copy, A: Alloc>(val: &[T], arena: &mut A, n: usize) {
     }
 }
 
-const MIN_ALIGN: usize = std::mem::align_of::<usize>();
+const MIN_ALIGN: usize = std::mem::align_of::<u128>();
 const ALLOCATIONS: usize = 10000;
 const LEN: usize = 1;
 
@@ -140,6 +157,14 @@ fn bench_alloc_generic<T: Default + From<usize>>(name: &str, c: &mut Criterion) 
     });
     let mut arena = black_box(BumpDownWord(BumpDown::with_capacity(capacity)));
     group.bench_function("word/down", |b| {
+        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpUp2Word(BumpUp::with_capacity(capacity)));
+    group.bench_function("2word/up", |b| {
+        b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
+    });
+    let mut arena = black_box(BumpDown2Word(BumpDown::with_capacity(capacity)));
+    group.bench_function("2word/down", |b| {
         b.iter(|| alloc::<T, _>(&mut arena, ALLOCATIONS))
     });
 

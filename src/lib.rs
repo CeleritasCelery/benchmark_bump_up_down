@@ -83,20 +83,18 @@ impl<const MIN_ALIGN: usize> BumpUp<MIN_ALIGN> {
         let ptr = self.ptr;
         let align = layout.align();
         let align_offset = if align > MIN_ALIGN {
-            // ptr.align_offset(align)
             Self::align_offset(ptr as usize, align)
         } else {
             0
         };
 
         let size = layout.size() + align_offset;
-        let available = unsafe { self.end.offset_from(self.ptr) } as usize;
+        let available = self.end as usize - ptr as usize ;
         if available >= size {
-            // let end_offset = (layout.size() as *mut u8).align_offset(MIN_ALIGN);
             let end_offset = Self::align_offset(layout.size(), MIN_ALIGN);
             let aligned_size = size + end_offset;
-            self.ptr = self.ptr.wrapping_add(aligned_size);
             let result = ptr.wrapping_add(align_offset);
+            self.ptr = ptr.wrapping_add(aligned_size);
             unsafe { Some(NonNull::new_unchecked(result)) }
         } else {
             None
