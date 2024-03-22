@@ -3,15 +3,16 @@ use criterion::*;
 use std::alloc::Layout;
 use std::cmp::max;
 use std::mem::size_of;
+use std::ptr::NonNull;
 
 pub trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>>;
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>>;
     fn clear(&mut self);
 }
 
 struct BumpUpOrig(BumpUp<1>);
 impl Alloc for BumpUpOrig {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc_orig(layout)
     }
 
@@ -22,7 +23,7 @@ impl Alloc for BumpUpOrig {
 
 struct BumpDownOrig(BumpDown<1>);
 impl Alloc for BumpDownOrig {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc_orig(layout)
     }
 
@@ -33,7 +34,7 @@ impl Alloc for BumpDownOrig {
 
 struct BumpUpByte(BumpUp<1>);
 impl Alloc for BumpUpByte {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc(layout)
     }
 
@@ -44,7 +45,7 @@ impl Alloc for BumpUpByte {
 
 struct BumpUpWord(BumpUp<8>);
 impl Alloc for BumpUpWord {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc(layout)
     }
 
@@ -55,7 +56,7 @@ impl Alloc for BumpUpWord {
 
 struct BumpUp2Word(BumpUp<16>);
 impl Alloc for BumpUp2Word {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc(layout)
     }
 
@@ -66,7 +67,7 @@ impl Alloc for BumpUp2Word {
 
 struct BumpDownWord(BumpDown<8>);
 impl Alloc for BumpDownWord {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc(layout)
     }
 
@@ -77,7 +78,7 @@ impl Alloc for BumpDownWord {
 
 struct BumpDown2Word(BumpDown<16>);
 impl Alloc for BumpDown2Word {
-    fn alloc(&mut self, layout: Layout) -> Option<std::ptr::NonNull<u8>> {
+    fn alloc(&mut self, layout: Layout) -> Option<NonNull<u8>> {
         self.0.alloc(layout)
     }
 
